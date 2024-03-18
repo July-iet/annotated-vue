@@ -92,10 +92,12 @@ export function createPatchFunction(backend) {
     remove.listeners = listeners
     return remove
   }
-
+  
+  // 删除节点
   function removeNode(el) {
     const parent = nodeOps.parentNode(el)
     // element may have already been removed due to v-html / v-text
+    // 利用该节点的父节点进行删除操作
     if (isDef(parent)) {
       nodeOps.removeChild(parent, el)
     }
@@ -119,6 +121,7 @@ export function createPatchFunction(backend) {
 
   let creatingElmInVPre = 0
 
+  // 创建节点
   function createElm(
     vnode,
     insertedVnodeQueue,
@@ -146,7 +149,7 @@ export function createPatchFunction(backend) {
     const data = vnode.data
     const children = vnode.children
     const tag = vnode.tag
-    // 标签非空
+    // 标签非空，说明是元素节点
     if (isDef(tag)) {
       if (__DEV__) {
         if (data && data.pre) {
@@ -169,28 +172,26 @@ export function createPatchFunction(backend) {
         : nodeOps.createElement(tag, vnode)
       setScope(vnode)
 
-      // 创建元素节点的子节点
-      createChildren(vnode, children, insertedVnodeQueue)
+      createChildren(vnode, children, insertedVnodeQueue) // 创建元素节点的子节点
       // data 存在
       if (isDef(data)) {
         invokeCreateHooks(vnode, insertedVnodeQueue)
       }
-      // 插入节点
-      insert(parentElm, vnode.elm, refElm)
+      insert(parentElm, vnode.elm, refElm)  // 插入节点
 
       if (__DEV__ && data && data.pre) {
         creatingElmInVPre--
       }
-    } else if (isTrue(vnode.isComment)) {
-      // 创建注释节点
-      vnode.elm = nodeOps.createComment(vnode.text)
-      // 插入到DOM中
-      insert(parentElm, vnode.elm, refElm)
-    } else {
-      // 创建文本节点
-      vnode.elm = nodeOps.createTextNode(vnode.text)
-      // 插入到DOM中
-      insert(parentElm, vnode.elm, refElm)
+    } 
+    // 注释非空，说明是注释节点 
+    else if (isTrue(vnode.isComment)) {
+      vnode.elm = nodeOps.createComment(vnode.text) // 创建注释节点
+      insert(parentElm, vnode.elm, refElm)  // 插入到DOM中
+    } 
+    // 否则就认为是文本节点
+    else {
+      vnode.elm = nodeOps.createTextNode(vnode.text)  // 创建文本节点
+      insert(parentElm, vnode.elm, refElm)  // 插入到DOM中
     }
   }
 
@@ -372,7 +373,8 @@ export function createPatchFunction(backend) {
       }
     }
   }
-
+  
+  // 删除节点
   function removeVnodes(vnodes, startIdx, endIdx) {
     for (; startIdx <= endIdx; ++startIdx) {
       const ch = vnodes[startIdx]
@@ -532,7 +534,7 @@ export function createPatchFunction(backend) {
           // 如果在 oldChildren 里找不到当前循环的 newChildren 里的子节点
         if (isUndef(idxInOld)) {
           // New element
-          // 新增阶段，并插入到对应的位置上
+          // 新增节点，并插入到对应的位置上
           createElm(
             newStartVnode,
             insertedVnodeQueue,
