@@ -15,17 +15,19 @@ import { unicodeRegExp } from 'core/util/lang'
 import { ASTAttr, CompilerOptions } from 'types/compiler'
 
 // Regular Expressions for parsing tags and attributes
+// 属性匹配
 const attribute =
   /^\s*([^\s"'<>\/=]+)(?:\s*(=)\s*(?:"([^"]*)"+|'([^']*)'+|([^\s"'=<>`]+)))?/
 const dynamicArgAttribute =
   /^\s*((?:v-[\w-]+:|@|:|#)\[[^=]+?\][^\s"'<>\/=]*)(?:\s*(=)\s*(?:"([^"]*)"+|'([^']*)'+|([^\s"'=<>`]+)))?/
 const ncname = `[a-zA-Z_][\\-\\.0-9_a-zA-Z${unicodeRegExp.source}]*`
 const qnameCapture = `((?:${ncname}\\:)?${ncname})`
-const startTagOpen = new RegExp(`^<${qnameCapture}`)
-const startTagClose = /^\s*(\/?)>/
-const endTag = new RegExp(`^<\\/${qnameCapture}[^>]*>`)
+const startTagOpen = new RegExp(`^<${qnameCapture}`)  // 开始标签匹配
+const startTagClose = /^\s*(\/?)>/  // 自闭合标签匹配
+const endTag = new RegExp(`^<\\/${qnameCapture}[^>]*>`) // 结束标签匹配
 const doctype = /^<!DOCTYPE [^>]+>/i
 // #7298: escape - to avoid being passed as HTML comment when inlined in page
+// 注释节点匹配
 const comment = /^<!\--/
 const conditionalComment = /^<!\[/
 
@@ -82,41 +84,53 @@ export function parseHTML(html, options: HTMLParserOptions) {
       let textEnd = html.indexOf('<')
       if (textEnd === 0) {
         // Comment:
+        // 解析注释
         if (comment.test(html)) {
           const commentEnd = html.indexOf('-->')
 
+          // 若注释闭合
           if (commentEnd >= 0) {
             if (options.shouldKeepComment && options.comment) {
+              // 如果需要保留注释，则创建注释类型的 AST 节点
               options.comment(
                 html.substring(4, commentEnd),
                 index,
                 index + commentEnd + 3
               )
             }
+            // 不保留注释则跳过"-->"，向后解析
             advance(commentEnd + 3)
             continue
           }
         }
 
         // https://en.wikipedia.org/wiki/Conditional_comment#Downlevel-revealed_conditional_comment
+        // 解析条件注释
+        // 先正则匹配条件注释
         if (conditionalComment.test(html)) {
           const conditionalEnd = html.indexOf(']>')
-
+          
+          // 如果条件节点闭合，则从原本的html字符串中把条件注释截掉，不需要创建 AST 节点
           if (conditionalEnd >= 0) {
+            // 继续向后解析
             advance(conditionalEnd + 2)
             continue
           }
         }
 
         // Doctype:
+        // 解析doctype
         const doctypeMatch = html.match(doctype)
         if (doctypeMatch) {
+          // 继续向后解析
           advance(doctypeMatch[0].length)
           continue
         }
 
         // End tag:
+        // 解析元素标签
         const endTagMatch = html.match(endTag)
+        // 若匹配成功，获得数组，否则得到null
         if (endTagMatch) {
           const curIndex = index
           advance(endTagMatch[0].length)
@@ -125,8 +139,10 @@ export function parseHTML(html, options: HTMLParserOptions) {
         }
 
         // Start tag:
+        // 解析元素标签
         const startTagMatch = parseStartTag()
         if (startTagMatch) {
+          // 处理元素标签，转化成对应的 AST
           handleStartTag(startTagMatch)
           if (shouldIgnoreFirstNewline(startTagMatch.tagName, html)) {
             advance(1)
@@ -206,22 +222,26 @@ export function parseHTML(html, options: HTMLParserOptions) {
 
   // Clean up any remaining tags
   parseEndTag()
-
+  // 移动解析游标
   function advance(n) {
     index += n
     html = html.substring(n)
   }
-
+  // 解析元素标签，返回匹配结果
   function parseStartTag() {
+    // 匹配开始标签
     const start = html.match(startTagOpen)
+    // 开始标签匹配成功，会返回一个数组，取start[1]为tagName
     if (start) {
       const match: any = {
         tagName: start[1],
         attrs: [],
         start: index
       }
+      // 向后解析
       advance(start[0].length)
       let end, attr
+      // 匹配元素标签和结束标签
       while (
         !(end = html.match(startTagClose)) &&
         (attr = html.match(dynamicArgAttribute) || html.match(attribute))
@@ -231,8 +251,9 @@ export function parseHTML(html, options: HTMLParserOptions) {
         attr.end = index
         match.attrs.push(attr)
       }
+      // 通过匹配结果判断当前元素是否是自闭合标签
       if (end) {
-        match.unarySlash = end[1]
+        match.unarySlash = end[1] // 非自闭合标签匹配结果中的end[1]为""，而自闭合标签匹配结果中的end[1]为"/"
         advance(end[0].length)
         match.end = index
         return match
@@ -240,9 +261,10 @@ export function parseHTML(html, options: HTMLParserOptions) {
     }
   }
 
+  // 处理元素的开始标签
   function handleStartTag(match) {
-    const tagName = match.tagName
-    const unarySlash = match.unarySlash
+    const tagName = match.tagName // 开始标签的标签名
+    const unarySlash = match.unarySlash // 是否为可闭合标签
 
     if (expectHTML) {
       if (lastTag === 'p' && isNonPhrasingTag(tagName)) {
@@ -252,21 +274,22 @@ export function parseHTML(html, options: HTMLParserOptions) {
         parseEndTag(tagName)
       }
     }
+    
+    const unary = isUnaryTag(tagName) || !!unarySlash // 是不是自闭合
 
-    const unary = isUnaryTag(tagName) || !!unarySlash
-
-    const l = match.attrs.length
+    const l = match.attrs.length  // 属性长度
     const attrs: ASTAttr[] = new Array(l)
+    // 循环处理提取出来的标签属性数组 match.attrs
     for (let i = 0; i < l; i++) {
-      const args = match.attrs[i]
+      const args = match.attrs[i] // 某个属性对象
       const value = args[3] || args[4] || args[5] || ''
       const shouldDecodeNewlines =
         tagName === 'a' && args[1] === 'href'
           ? options.shouldDecodeNewlinesForHref
           : options.shouldDecodeNewlines
-      attrs[i] = {
-        name: args[1],
-        value: decodeAttr(value, shouldDecodeNewlines)
+      attrs[i] = {  
+        name: args[1],  // 标签属性的属性名
+        value: decodeAttr(value, shouldDecodeNewlines)  // 标签属性的属性值
       }
       if (__DEV__ && options.outputSourceRange) {
         attrs[i].start = args.start + args[0].match(/^\s*/).length
@@ -274,6 +297,7 @@ export function parseHTML(html, options: HTMLParserOptions) {
       }
     }
 
+    // 如果非自闭合，入栈
     if (!unary) {
       stack.push({
         tag: tagName,
@@ -284,12 +308,12 @@ export function parseHTML(html, options: HTMLParserOptions) {
       })
       lastTag = tagName
     }
-
+    // 如果是自闭合标签，调用 start 钩子函数并传入处理好的参数创建 AST 节点
     if (options.start) {
       options.start(tagName, attrs, unary, match.start, match.end)
     }
   }
-
+  // 处理结束元素标签，调用 end 钩子函数
   function parseEndTag(tagName?: any, start?: any, end?: any) {
     let pos, lowerCasedTagName
     if (start == null) start = index

@@ -28,6 +28,7 @@ import {
   CompilerOptions
 } from 'types/compiler'
 
+// 正则表达式
 export const onRE = /^@|^v-on:/
 export const dirRE = process.env.VBIND_PROP_SHORTHAND
   ? /^v-|^@|^:|^\.|^#/
@@ -64,6 +65,7 @@ let platformMustUseProp
 let platformGetTagNamespace
 let maybeComponent
 
+// 创建 AST 节点
 export function createASTElement(
   tag: string,
   attrs: Array<ASTAttr>,
@@ -83,6 +85,7 @@ export function createASTElement(
 /**
  * Convert HTML string to AST.
  */
+// 把 HTML 转换成 AST 树
 export function parse(template: string, options: CompilerOptions): ASTElement {
   warn = options.warn || baseWarn
 
@@ -211,7 +214,7 @@ export function parse(template: string, options: CompilerOptions): ASTElement {
       )
     }
   }
-
+  // 解析器的主函数，HTML 解析器
   parseHTML(template, {
     warn,
     expectHTML: options.expectHTML,
@@ -221,6 +224,8 @@ export function parse(template: string, options: CompilerOptions): ASTElement {
     shouldDecodeNewlinesForHref: options.shouldDecodeNewlinesForHref,
     shouldKeepComment: options.comments,
     outputSourceRange: options.outputSourceRange,
+    // 1、开始标签，调用 hook 生成元素类型的 AST
+    // 参数：标签名，属性名，是否闭合，起始，结束
     start(tag, attrs, unary, start, end) {
       // check namespace.
       // inherit parent ns if there is one
@@ -233,6 +238,7 @@ export function parse(template: string, options: CompilerOptions): ASTElement {
         attrs = guardIESVGBug(attrs)
       }
 
+      // 生成元素类型 AST
       let element: ASTElement = createASTElement(tag, attrs, currentParent)
       if (ns) {
         element.ns = ns
@@ -305,6 +311,7 @@ export function parse(template: string, options: CompilerOptions): ASTElement {
         }
       }
 
+      // 是否为自闭合标签
       if (!unary) {
         currentParent = element
         stack.push(element)
@@ -313,6 +320,8 @@ export function parse(template: string, options: CompilerOptions): ASTElement {
       }
     },
 
+    // 结束节点
+    // 参数：标签、开始、结束
     end(tag, start, end) {
       const element = stack[stack.length - 1]
       // pop stack
@@ -324,6 +333,7 @@ export function parse(template: string, options: CompilerOptions): ASTElement {
       closeElement(element)
     },
 
+    // 标签文本
     chars(text: string, start?: number, end?: number) {
       if (!currentParent) {
         if (__DEV__) {
@@ -376,6 +386,7 @@ export function parse(template: string, options: CompilerOptions): ASTElement {
         let res
         let child: ASTNode | undefined
         if (!inVPre && text !== ' ' && (res = parseText(text, delimiters))) {
+          // 动态文本类型节点，带变量
           child = {
             type: 2,
             expression: res.expression,
@@ -387,6 +398,7 @@ export function parse(template: string, options: CompilerOptions): ASTElement {
           !children.length ||
           children[children.length - 1].text !== ' '
         ) {
+          // 静态文本类型节点
           child = {
             type: 3,
             text
@@ -401,10 +413,12 @@ export function parse(template: string, options: CompilerOptions): ASTElement {
         }
       }
     },
+    // 注释节点
     comment(text: string, start, end) {
       // adding anything as a sibling to the root node is forbidden
       // comments should still be allowed, but ignored
       if (currentParent) {
+        // 静态文本节点
         const child: ASTText = {
           type: 3,
           text,
