@@ -54,16 +54,17 @@ export type CodegenResult = {
   staticRenderFns: Array<string>
 }
 
+// 代码生成
 export function generate(
   ast: ASTElement | void,
   options: CompilerOptions
 ): CodegenResult {
   const state = new CodegenState(options)
   // fix #11483, Root level <script> tags should not be rendered.
-  const code = ast
+  const code = ast  // 判空
     ? ast.tag === 'script'
       ? 'null'
-      : genElement(ast, state)
+      : genElement(ast, state)  // 创建VNode
     : '_c("div")'
   return {
     render: `with(this){return ${code}}`,
@@ -71,6 +72,7 @@ export function generate(
   }
 }
 
+// 生成不同的 VNode: 元素节点、文本节点、注释节点
 export function genElement(el: ASTElement, state: CodegenState): string {
   if (el.parent) {
     el.pre = el.pre || el.parent.pre
@@ -94,6 +96,8 @@ export function genElement(el: ASTElement, state: CodegenState): string {
     if (el.component) {
       code = genComponent(el.component, el, state)
     } else {
+      // 处理元素节点
+      // 1、获取data
       let data
       const maybeComponent = state.maybeComponent(el)
       if (!el.plain || (el.pre && maybeComponent)) {
@@ -108,7 +112,9 @@ export function genElement(el: ASTElement, state: CodegenState): string {
       }
       if (!tag) tag = `'${el.tag}'`
 
+      // 2、节点子节点列表
       const children = el.inlineTemplate ? null : genChildren(el, state, true)
+      // 3、生成 _() 字符串
       code = `_c(${tag}${
         data ? `,${data}` : '' // data
       }${
@@ -274,6 +280,7 @@ export function genFor(
   )
 }
 
+// 获取元素节点的data
 export function genData(el: ASTElement, state: CodegenState): string {
   let data = '{'
 
@@ -538,6 +545,7 @@ export function genChildren(
       ? getNormalizationType(children, state.maybeComponent)
       : 0
     const gen = altGenNode || genNode
+    // 遍历AST的children属性元素
     return `[${children.map(c => gen(c, state)).join(',')}]${
       normalizationType ? `,${normalizationType}` : ''
     }`
@@ -590,14 +598,16 @@ function genNode(node: ASTNode, state: CodegenState): string {
   }
 }
 
+// 文本节点
 export function genText(text: ASTText | ASTExpression): string {
   return `_v(${
     text.type === 2
-      ? text.expression // no need for () because already wrapped in _s()
-      : transformSpecialNewlines(JSON.stringify(text.text))
+      ? text.expression // no need for () because already wrapped in _s() // 动态文本
+      : transformSpecialNewlines(JSON.stringify(text.text)) // 静态文本
   })`
 }
 
+// 注释节点
 export function genComment(comment: ASTText): string {
   return `_e(${JSON.stringify(comment.text)})`
 }

@@ -37,12 +37,14 @@ function genStaticKeys(keys: string): Function {
   )
 }
 
+// 标记静态节点
 function markStatic(node: ASTNode) {
   node.static = isStatic(node)
   if (node.type === 1) {
     // do not make component slot content static. this avoids
     // 1. components not able to mutate slot nodes
     // 2. static slot content fails for hot-reloading
+    // 针对 slot 进行处理
     if (
       !isPlatformReservedTag(node.tag) &&
       node.tag !== 'slot' &&
@@ -50,13 +52,16 @@ function markStatic(node: ASTNode) {
     ) {
       return
     }
+    // 如果当前节点是元素节点，递归判断子节点
     for (let i = 0, l = node.children.length; i < l; i++) {
       const child = node.children[i]
       markStatic(child)
       if (!child.static) {
+        // 如果子节点中存在非静态节点，则将当前节点标记为非静态节点
         node.static = false
       }
     }
+    // 对条件渲染的节点也进行判断
     if (node.ifConditions) {
       for (let i = 1, l = node.ifConditions.length; i < l; i++) {
         const block = node.ifConditions[i].block
@@ -69,6 +74,7 @@ function markStatic(node: ASTNode) {
   }
 }
 
+// 标记静态根节点
 function markStaticRoots(node: ASTNode, isInFor: boolean) {
   if (node.type === 1) {
     if (node.static || node.once) {
@@ -78,9 +84,9 @@ function markStaticRoots(node: ASTNode, isInFor: boolean) {
     // are not just static text. Otherwise the cost of hoisting out will
     // outweigh the benefits and it's better off to just always render it fresh.
     if (
-      node.static &&
-      node.children.length &&
-      !(node.children.length === 1 && node.children[0].type === 3)
+      node.static &&  // 节点本身是静态节点
+      node.children.length && // 必须拥有子节点
+      !(node.children.length === 1 && node.children[0].type === 3)  // 子节点不能是“只有一个文本节点”
     ) {
       node.staticRoot = true
       return
@@ -100,11 +106,14 @@ function markStaticRoots(node: ASTNode, isInFor: boolean) {
   }
 }
 
+// 判断是不是静态节点
 function isStatic(node: ASTNode): boolean {
+  // 文本里存在表达式
   if (node.type === 2) {
     // expression
     return false
   }
+  // 文本里没有变量，首次渲染后不会再发生变化
   if (node.type === 3) {
     // text
     return true

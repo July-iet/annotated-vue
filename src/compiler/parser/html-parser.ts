@@ -71,17 +71,23 @@ export interface HTMLParserOptions extends CompilerOptions {
 }
 
 export function parseHTML(html, options: HTMLParserOptions) {
-  const stack: any[] = []
+  const stack: any[] = [] // 维护 AST 节点层级的栈
   const expectHTML = options.expectHTML
   const isUnaryTag = options.isUnaryTag || no
-  const canBeLeftOpenTag = options.canBeLeftOpenTag || no
-  let index = 0
-  let last, lastTag
+  const canBeLeftOpenTag = options.canBeLeftOpenTag || no // 监测标签是否普通标签（区别于自闭合标签）
+  let index = 0 // 解析游标，表示当前从何处开始解析模板字符串
+  let last,   // 存储剩余还未解析的模板字符串
+      lastTag // 存储位于stack栈顶的元素
+
+  // 当html不为空，开启循环
   while (html) {
     last = html
     // Make sure we're not in a plaintext content element like script/style
+    // 确保不在 script/style 等纯文本内容元素中
     if (!lastTag || !isPlainTextElement(lastTag)) {
+      // 查找<的位置
       let textEnd = html.indexOf('<')
+      // 如果<在首位，按其他5种元素节点解析
       if (textEnd === 0) {
         // Comment:
         // 解析注释
@@ -133,6 +139,7 @@ export function parseHTML(html, options: HTMLParserOptions) {
         // 若匹配成功，获得数组，否则得到null
         if (endTagMatch) {
           const curIndex = index
+          // 向后解析
           advance(endTagMatch[0].length)
           parseEndTag(endTagMatch[1], curIndex, index)
           continue
@@ -152,8 +159,13 @@ export function parseHTML(html, options: HTMLParserOptions) {
       }
 
       let text, rest, next
+      // 如果<不在首位，文本开头
       if (textEnd >= 0) {
+        // <之前的数据肯定是文本内容
+        // 但<之后的数据不一定，所以把<之后的数据取出来处理
+        // 例如 1<2 </div
         rest = html.slice(textEnd)
+        // 用提取文本匹配 endTag/startTagOpen/comment/conditionalComment，都匹配失败的话，表示属于文本本身的内容
         while (
           !endTag.test(rest) &&
           !startTagOpen.test(rest) &&
@@ -161,26 +173,35 @@ export function parseHTML(html, options: HTMLParserOptions) {
           !conditionalComment.test(rest)
         ) {
           // < in plain text, be forgiving and treat it as text
+          // 查找该文本后续是否还有<
           next = rest.indexOf('<', 1)
+          // 如果没有，则表示<后面也是文本
           if (next < 0) break
+          // 如果还有，表示<是文本中的一个字符
           textEnd += next
+          // 把next之后的内容截出来继续下一轮循环
           rest = html.slice(textEnd)
         }
+        // <是结束标签的开始，说明从开始到<都是文本，截取
         text = html.substring(0, textEnd)
       }
 
+      // 如果在模板字符串中没有找到 <
+      // 说明整个模板字符串是文本
       if (textEnd < 0) {
-        text = html
+        text = html 
       }
-
+      // 向后解析
       if (text) {
         advance(text.length)
       }
 
+      // 把截取出来的text转化成textAST
       if (options.chars && text) {
         options.chars(text, index - text.length, index)
       }
     } else {
+      // 在纯文本标签里，父元素为 script/style/textarea，其他内容被当作纯文本处理
       let endTagLength = 0
       const stackedTag = lastTag.toLowerCase()
       const reStackedTag =
@@ -209,6 +230,7 @@ export function parseHTML(html, options: HTMLParserOptions) {
       parseEndTag(stackedTag, index - endTagLength, index)
     }
 
+    // 将整个字符串作为文本对待
     if (html === last) {
       options.chars && options.chars(html)
       if (__DEV__ && !stack.length && options.warn) {
@@ -241,7 +263,7 @@ export function parseHTML(html, options: HTMLParserOptions) {
       // 向后解析
       advance(start[0].length)
       let end, attr
-      // 匹配元素标签和结束标签
+      // 匹配属性标签和结束标签
       while (
         !(end = html.match(startTagClose)) &&
         (attr = html.match(dynamicArgAttribute) || html.match(attribute))
@@ -313,6 +335,7 @@ export function parseHTML(html, options: HTMLParserOptions) {
       options.start(tagName, attrs, unary, match.start, match.end)
     }
   }
+
   // 处理结束元素标签，调用 end 钩子函数
   function parseEndTag(tagName?: any, start?: any, end?: any) {
     let pos, lowerCasedTagName
@@ -320,6 +343,7 @@ export function parseHTML(html, options: HTMLParserOptions) {
     if (end == null) end = index
 
     // Find the closest opened tag of the same type
+    // 从后往前遍历栈，寻找相同的标签记录在位置 pos
     if (tagName) {
       lowerCasedTagName = tagName.toLowerCase()
       for (pos = stack.length - 1; pos >= 0; pos--) {
@@ -334,6 +358,8 @@ export function parseHTML(html, options: HTMLParserOptions) {
 
     if (pos >= 0) {
       // Close all the open elements, up the stack
+      // 从后往pos处遍历，如果存在比pos大的元素，说明该元素缺少闭合元素
+      // 正常的pos应该在栈顶
       for (let i = stack.length - 1; i >= pos; i--) {
         if (__DEV__ && (i > pos || !tagName) && options.warn) {
           options.warn(`tag <${stack[i].tag}> has no matching end tag.`, {
@@ -350,10 +376,12 @@ export function parseHTML(html, options: HTMLParserOptions) {
       stack.length = pos
       lastTag = pos && stack[pos - 1].tag
     } else if (lowerCasedTagName === 'br') {
+      // 单独处理 br 标签
       if (options.start) {
         options.start(tagName, [], true, start, end)
       }
     } else if (lowerCasedTagName === 'p') {
+      // 单独处理 p 标签
       if (options.start) {
         options.start(tagName, [], false, start, end)
       }
